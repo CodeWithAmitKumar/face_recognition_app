@@ -1,0 +1,14 @@
+# Disable PHP execution in upload directories
+php_flag engine off
+
+# Prevent script execution
+AddType application/octet-stream .php .phtml .php3 .php4 .php5 .phps .py
+
+# Deny access to Python scripts
+<FilesMatch "\.(py|pyc|pyo)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Prevent directory listing
+Options -Indexes
