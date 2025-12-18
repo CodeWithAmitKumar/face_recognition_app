@@ -5,6 +5,20 @@ requireStudioLogin();
 
 $studio_id = $_SESSION['studio_id'];
 
+
+// Check studio status
+$stmt = $conn->prepare("SELECT status FROM studios WHERE studio_id = ?");
+$stmt->bind_param("i", $studio_id);
+$stmt->execute();
+$studio_status = $stmt->get_result()->fetch_assoc()['status'];
+$stmt->close();
+
+$is_inactive = ($studio_status == 'inactive');
+
+// Clear status error message
+$status_error = isset($_SESSION['status_error']) ? $_SESSION['status_error'] : '';
+unset($_SESSION['status_error']);
+
 // Get studio statistics
 $stats = getStudioStats($conn, $studio_id);
 
@@ -309,6 +323,22 @@ $recent_albums = mysqli_query($conn, "SELECT a.*, COUNT(ai.image_id) as image_co
             <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
         </div>
     </nav>
+
+    <?php if ($is_inactive): ?>
+    <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; padding: 20px; text-align: center; margin-bottom: 30px; border-radius: 15px; animation: pulse 2s infinite;">
+        <i class="fas fa-exclamation-triangle" style="font-size: 40px; margin-bottom: 10px;"></i>
+        <h2 style="margin-bottom: 10px;">Account Deactivated</h2>
+        <p style="font-size: 16px;">Your studio account has been temporarily deactivated by the administrator. You can view your data but cannot make any changes. Please contact the admin for assistance.</p>
+    </div>
+<?php endif; ?>
+
+<?php if ($status_error): ?>
+    <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; padding: 15px 25px; border-radius: 10px; margin-bottom: 30px; display: flex; align-items: center; gap: 10px;">
+        <i class="fas fa-exclamation-circle" style="font-size: 24px;"></i>
+        <span><?php echo $status_error; ?></span>
+    </div>
+<?php endif; ?>
+
 
     <div class="container">
         <div class="welcome-banner">

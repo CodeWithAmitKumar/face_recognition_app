@@ -1,7 +1,8 @@
 <?php
 require_once '../config.php';
 require_once '../functions.php';
-requireStudioLogin();
+// requireStudioLogin();
+requireActiveStudio($conn); // ADD THIS LINE
 
 $studio_id = $_SESSION['studio_id'];
 

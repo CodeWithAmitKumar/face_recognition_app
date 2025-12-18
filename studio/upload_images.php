@@ -2,10 +2,16 @@
 require_once '../config.php';
 require_once '../functions.php';
 require_once '../phpqrcode/qrlib.php';
+
 requireStudioLogin();
 
 $studio_id = $_SESSION['studio_id'];
 $album_id = isset($_GET['album_id']) ? intval($_GET['album_id']) : 0;
+
+// Check studio status for POST actions only
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    requireActiveStudio($conn); // ADD THIS
+}
 
 if ($album_id <= 0) {
     header("Location: select_album.php");

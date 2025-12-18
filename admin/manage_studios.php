@@ -3,36 +3,34 @@ require_once '../config.php';
 require_once '../functions.php';
 requireAdminLogin();
 
-// Handle status toggle
-if (isset($_GET['toggle_status'])) {
-    $studio_id = intval($_GET['toggle_status']);
-    $stmt = $conn->prepare("UPDATE studios SET status = IF(status='active', 'inactive', 'active') WHERE studio_id = ?");
+// Handle status toggle via AJAX
+if (isset($_GET['toggle_status']) && isset($_GET['studio_id'])) {
+    $studio_id = intval($_GET['studio_id']);
+    $stmt = $conn->prepare("SELECT status FROM studios WHERE studio_id = ?");
     $stmt->bind_param("i", $studio_id);
     $stmt->execute();
-    $stmt->close();
-    header("Location: manage_studios.php");
+    $result = $stmt->get_result()->fetch_assoc();
+    
+    $new_status = ($result['status'] == 'active') ? 'inactive' : 'active';
+    
+    $update = $conn->prepare("UPDATE studios SET status = ? WHERE studio_id = ?");
+    $update->bind_param("si", $new_status, $studio_id);
+    $update->execute();
+    
+    echo json_encode(['success' => true, 'status' => $new_status]);
     exit();
 }
 
 // Get all studios
-$search = isset($_GET['search']) ? clean_input($_GET['search']) : '';
-$status_filter = isset($_GET['status']) ? $_GET['status'] : 'all';
-
 $sql = "SELECT s.*, COUNT(a.album_id) as album_count 
         FROM studios s 
         LEFT JOIN albums a ON s.studio_id = a.studio_id 
-        WHERE 1=1";
+        GROUP BY s.studio_id 
+        ORDER BY s.created_at DESC";
+$result = mysqli_query($conn, $sql);
 
-if ($search) {
-    $sql .= " AND (s.studio_name LIKE '%$search%' OR s.owner_name LIKE '%$search%' OR s.email LIKE '%$search%')";
-}
-
-if ($status_filter != 'all') {
-    $sql .= " AND s.status = '$status_filter'";
-}
-
-$sql .= " GROUP BY s.studio_id ORDER BY s.created_at DESC";
-$studios = mysqli_query($conn, $sql);
+$delete_success = isset($_GET['deleted']) && $_GET['deleted'] == 'success';
+$delete_error = isset($_GET['error']) && $_GET['error'] == 'delete_failed';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -79,6 +77,9 @@ $studios = mysqli_query($conn, $sql);
             text-decoration: none;
             font-weight: 600;
             transition: 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         
         .navbar-menu a:hover {
@@ -91,72 +92,22 @@ $studios = mysqli_query($conn, $sql);
             padding: 0 20px;
         }
         
-        .card {
+        .header {
             background: white;
             padding: 30px;
             border-radius: 15px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        
-        .card-header {
+            margin-bottom: 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 30px;
             flex-wrap: wrap;
             gap: 20px;
         }
         
-        .card-header h1 {
+        .header h1 {
             color: #333;
             font-size: 28px;
-        }
-        
-        .filters {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            margin-bottom: 25px;
-        }
-        
-        .search-box {
-            flex: 1;
-            min-width: 250px;
-            position: relative;
-        }
-        
-        .search-box input {
-            width: 100%;
-            padding: 12px 45px 12px 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 15px;
-        }
-        
-        .search-box input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        .search-box button {
-            position: absolute;
-            right: 5px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-        
-        .filter-select {
-            padding: 12px 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 15px;
-            cursor: pointer;
         }
         
         .btn {
@@ -182,115 +133,347 @@ $studios = mysqli_query($conn, $sql);
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
         
+        .success-message {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideDown 0.5s ease;
+        }
+        
+        .error-message {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideDown 0.5s ease;
+        }
+        
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .studios-table {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
         table {
             width: 100%;
             border-collapse: collapse;
         }
         
-        table th {
-            background: #f8f9fa;
-            padding: 15px;
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        th {
+            padding: 20px;
             text-align: left;
             font-weight: 600;
-            color: #333;
-            border-bottom: 2px solid #e0e0e0;
+            font-size: 14px;
+            text-transform: uppercase;
         }
         
-        table td {
-            padding: 15px;
+        td {
+            padding: 20px;
             border-bottom: 1px solid #f0f0f0;
-            color: #666;
+            color: #333;
         }
         
-        table tr:hover {
+        tr:hover {
             background: #f8f9fa;
+        }
+        
+        .studio-name {
+            font-weight: 600;
+            color: #333;
         }
         
         .badge {
+            display: inline-block;
             padding: 5px 12px;
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
         }
         
-        .badge-success {
-            background: #d4edda;
-            color: #155724;
+        .badge-albums {
+            background: #e8f0ff;
+            color: #667eea;
         }
         
-        .badge-danger {
-            background: #f8d7da;
-            color: #721c24;
+        /* Toggle Switch Styles */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 30px;
         }
         
-        .action-btns {
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ff6b6b;
+            transition: .4s;
+            border-radius: 30px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: #2ecc71;
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(30px);
+        }
+        
+        .status-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-top: 5px;
+            text-align: center;
+        }
+        
+        .status-active {
+            color: #2ecc71;
+        }
+        
+        .status-inactive {
+            color: #ff6b6b;
+        }
+        
+        .action-buttons {
             display: flex;
-            gap: 8px;
+            gap: 10px;
         }
         
         .btn-small {
-            padding: 6px 12px;
+            padding: 8px 15px;
             font-size: 13px;
-            border-radius: 6px;
+            border-radius: 8px;
             text-decoration: none;
             display: inline-flex;
             align-items: center;
             gap: 5px;
-            transition: 0.3s;
+            transition: all 0.3s ease;
             border: none;
             cursor: pointer;
+            font-weight: 600;
         }
         
         .btn-info {
-            background: #3498db;
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
             color: white;
         }
         
-        .btn-warning {
-            background: #f39c12;
-            color: white;
-        }
-        
-        .btn-danger {
-            background: #e74c3c;
-            color: white;
-        }
-        
-        .btn-success {
-            background: #27ae60;
-            color: white;
-        }
-        
-        .btn-small:hover {
+        .btn-info:hover {
             transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(52, 152, 219, 0.4);
+        }
+        
+        .btn-edit {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+            color: white;
+        }
+        
+        .btn-edit:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(243, 156, 18, 0.4);
+        }
+        
+        .btn-delete {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+            color: white;
+        }
+        
+        .btn-delete:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
         }
         
         .empty-state {
             text-align: center;
-            padding: 60px 20px;
-            color: #999;
+            padding: 80px 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
         
         .empty-state i {
-            font-size: 60px;
+            font-size: 80px;
             margin-bottom: 20px;
             opacity: 0.3;
+            color: #667eea;
+        }
+        
+        .empty-state h3 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #666;
+        }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 500px;
+            margin: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: zoomIn 0.3s ease;
+            position: relative;
+        }
+        
+        @keyframes zoomIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        
+        .modal-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+            color: #ff6b6b;
+        }
+        
+        .modal-content h3 {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .modal-content p {
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #f0f0f0;
+            border: none;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px;
+            color: #666;
+            transition: all 0.3s ease;
+        }
+        
+        .close-btn:hover {
+            background: #e0e0e0;
+            transform: rotate(90deg);
+        }
+        
+        .modal-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .btn-cancel {
+            background: #e0e0e0;
+            color: #666;
+        }
+        
+        .btn-cancel:hover {
+            background: #d0d0d0;
+        }
+        
+        .btn-confirm {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+            color: white;
+        }
+        
+        .btn-confirm:hover {
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+        }
+        
+        .warning-box {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            color: #856404;
+            font-size: 14px;
+            text-align: left;
+        }
+        
+        .warning-box ul {
+            margin: 10px 0 10px 30px;
         }
         
         @media (max-width: 768px) {
             .navbar {
                 padding: 15px 20px;
+                flex-direction: column;
+                gap: 15px;
             }
             .navbar-menu {
                 flex-direction: column;
                 gap: 10px;
             }
-            .card {
-                padding: 20px;
+            .studios-table {
                 overflow-x: auto;
             }
             table {
-                font-size: 14px;
+                min-width: 900px;
             }
         }
     </style>
@@ -298,93 +481,223 @@ $studios = mysqli_query($conn, $sql);
 <body>
     <nav class="navbar">
         <div class="navbar-brand">
-            <i class="fas fa-user-shield"></i> Admin Panel
+            <i class="fas fa-shield-alt"></i> Admin Panel
         </div>
         <div class="navbar-menu">
             <a href="index.php"><i class="fas fa-home"></i> Dashboard</a>
             <a href="create_studio.php"><i class="fas fa-plus"></i> Create Studio</a>
-            <a href="manage_studios.php"><i class="fas fa-store"></i> Manage Studios</a>
+            <a href="manage_studios.php"><i class="fas fa-building"></i> Manage Studios</a>
             <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
         </div>
     </nav>
     
     <div class="container">
-        <div class="card">
-            <div class="card-header">
-                <h1><i class="fas fa-store"></i> Manage Studios</h1>
-                <a href="create_studio.php" class="btn btn-primary">
-                    <i class="fas fa-plus"></i> Create New Studio
-                </a>
+        <?php if ($delete_success): ?>
+            <div class="success-message">
+                <i class="fas fa-check-circle" style="font-size: 24px;"></i>
+                <span>Studio deleted successfully!</span>
             </div>
-            
-            <form method="GET" class="filters">
-                <div class="search-box">
-                    <input type="text" name="search" placeholder="Search by studio name, owner, or email..." value="<?php echo htmlspecialchars($search); ?>">
-                    <button type="submit"><i class="fas fa-search"></i></button>
-                </div>
-                
-                <select name="status" class="filter-select" onchange="this.form.submit()">
-                    <option value="all" <?php echo $status_filter == 'all' ? 'selected' : ''; ?>>All Status</option>
-                    <option value="active" <?php echo $status_filter == 'active' ? 'selected' : ''; ?>>Active</option>
-                    <option value="inactive" <?php echo $status_filter == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
-                </select>
-            </form>
-            
-            <?php if (mysqli_num_rows($studios) > 0): ?>
+        <?php endif; ?>
+        
+        <?php if ($delete_error): ?>
+            <div class="error-message">
+                <i class="fas fa-exclamation-circle" style="font-size: 24px;"></i>
+                <span>Error deleting studio. Please try again.</span>
+            </div>
+        <?php endif; ?>
+        
+        <div class="header">
+            <h1><i class="fas fa-building"></i> Manage Studios (<?php echo mysqli_num_rows($result); ?>)</h1>
+            <a href="create_studio.php" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Create New Studio
+            </a>
+        </div>
+        
+        <?php if (mysqli_num_rows($result) > 0): ?>
+            <div class="studios-table">
                 <table>
                     <thead>
                         <tr>
-                            <th>ID</th>
                             <th>Studio Name</th>
-                            <th>Owner</th>
                             <th>Email</th>
                             <th>Contact</th>
-                            <th>Location</th>
                             <th>Albums</th>
                             <th>Status</th>
+                            <th>Created</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php while($studio = mysqli_fetch_assoc($studios)): ?>
+                        <?php while($studio = mysqli_fetch_assoc($result)): ?>
                             <tr>
-                                <td><strong>#<?php echo $studio['studio_id']; ?></strong></td>
-                                <td><strong><?php echo htmlspecialchars($studio['studio_name']); ?></strong></td>
-                                <td><?php echo htmlspecialchars($studio['owner_name']); ?></td>
-                                <td><?php echo htmlspecialchars($studio['email']); ?></td>
-                                <td><?php echo htmlspecialchars($studio['contact_no']); ?></td>
-                                <td><?php echo htmlspecialchars($studio['district'] . ', ' . $studio['state']); ?></td>
-                                <td><span class="badge badge-success"><?php echo $studio['album_count']; ?> albums</span></td>
+                                <td class="studio-name"><?php echo htmlspecialchars($studio['studio_name']); ?></td>
                                 <td>
-                                    <span class="badge <?php echo $studio['status'] == 'active' ? 'badge-success' : 'badge-danger'; ?>">
-                                        <?php echo ucfirst($studio['status']); ?>
+                                    <i class="fas fa-envelope" style="color: #667eea; margin-right: 5px;"></i>
+                                    <?php echo htmlspecialchars($studio['email']); ?>
+                                </td>
+                                <td>
+                                    <i class="fas fa-phone" style="color: #667eea; margin-right: 5px;"></i>
+                                    <?php echo htmlspecialchars($studio['contact_no']); ?>
+                                </td>
+                                <td>
+                                    <span class="badge badge-albums">
+                                        <i class="fas fa-folder"></i> <?php echo $studio['album_count']; ?> Albums
                                     </span>
                                 </td>
                                 <td>
-                                    <div class="action-btns">
-                                        <a href="view_studio_albums.php?id=<?php echo $studio['studio_id']; ?>" class="btn-small btn-info" title="View Albums">
-                                            <i class="fas fa-images"></i>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" 
+                                               class="status-toggle" 
+                                               data-studio-id="<?php echo $studio['studio_id']; ?>"
+                                               <?php echo ($studio['status'] == 'active') ? 'checked' : ''; ?>>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <div class="status-label status-<?php echo $studio['status']; ?>" id="status-label-<?php echo $studio['studio_id']; ?>">
+                                        <?php echo $studio['status']; ?>
+                                    </div>
+                                </td>
+                                <td><?php echo date('M d, Y', strtotime($studio['created_at'])); ?></td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a href="view_studio_albums.php?studio_id=<?php echo $studio['studio_id']; ?>" class="btn-small btn-info" title="View Albums">
+                                            <i class="fas fa-eye"></i>
                                         </a>
-                                        <a href="edit_studio.php?id=<?php echo $studio['studio_id']; ?>" class="btn-small btn-warning" title="Edit">
+                                        <a href="edit_studio.php?id=<?php echo $studio['studio_id']; ?>" class="btn-small btn-edit" title="Edit">
                                             <i class="fas fa-edit"></i>
                                         </a>
-                                        <a href="?toggle_status=<?php echo $studio['studio_id']; ?>" class="btn-small <?php echo $studio['status'] == 'active' ? 'btn-danger' : 'btn-success'; ?>" title="Toggle Status">
-                                            <i class="fas fa-power-off"></i>
-                                        </a>
+                                        <button onclick="confirmDelete(<?php echo $studio['studio_id']; ?>, '<?php echo htmlspecialchars(addslashes($studio['studio_name'])); ?>', <?php echo $studio['album_count']; ?>)" class="btn-small btn-delete" title="Delete">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
                         <?php endwhile; ?>
                     </tbody>
                 </table>
-            <?php else: ?>
-                <div class="empty-state">
-                    <i class="fas fa-store-slash"></i>
-                    <h3>No Studios Found</h3>
-                    <p>Create your first studio to get started!</p>
-                </div>
-            <?php endif; ?>
+            </div>
+        <?php else: ?>
+            <div class="empty-state">
+                <i class="fas fa-building"></i>
+                <h3>No Studios Yet</h3>
+                <p>Create your first studio to get started!</p>
+                <a href="create_studio.php" class="btn btn-primary" style="margin-top: 30px;">
+                    <i class="fas fa-plus"></i> Create First Studio
+                </a>
+            </div>
+        <?php endif; ?>
+    </div>
+    
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeDeleteModal()">×</button>
+            <div class="modal-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h3>Delete Studio?</h3>
+            <p>Are you sure you want to delete "<strong id="studioNameText"></strong>"?</p>
+            <div class="warning-box">
+                <i class="fas fa-exclamation-circle"></i> <strong>Warning:</strong> This will permanently delete:
+                <ul>
+                    <li>All customers of this studio</li>
+                    <li><span id="albumCount">0</span> albums</li>
+                    <li>All images in these albums</li>
+                    <li>All search logs</li>
+                </ul>
+                <strong>This action cannot be undone!</strong>
+            </div>
+            <div class="modal-actions">
+                <button onclick="closeDeleteModal()" class="btn btn-cancel">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+                <a href="#" id="confirmDeleteBtn" class="btn btn-confirm">
+                    <i class="fas fa-trash"></i> Delete Permanently
+                </a>
+            </div>
         </div>
     </div>
+    
+    <script>
+        // Handle status toggle
+        document.querySelectorAll('.status-toggle').forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                const studioId = this.getAttribute('data-studio-id');
+                const isChecked = this.checked;
+                const statusLabel = document.getElementById('status-label-' + studioId);
+                
+                fetch('manage_studios.php?toggle_status=1&studio_id=' + studioId)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            statusLabel.textContent = data.status;
+                            statusLabel.className = 'status-label status-' + data.status;
+                            
+                            // Show notification
+                            showNotification('Studio status updated to ' + data.status);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        // Revert toggle on error
+                        this.checked = !isChecked;
+                    });
+            });
+        });
+        
+        function confirmDelete(studioId, studioName, albumCount) {
+            const modal = document.getElementById('deleteModal');
+            const studioNameText = document.getElementById('studioNameText');
+            const albumCountText = document.getElementById('albumCount');
+            const confirmBtn = document.getElementById('confirmDeleteBtn');
+            
+            studioNameText.textContent = studioName;
+            albumCountText.textContent = albumCount;
+            confirmBtn.href = 'delete_studio.php?id=' + studioId;
+            
+            modal.classList.add('active');
+        }
+        
+        function closeDeleteModal() {
+            const modal = document.getElementById('deleteModal');
+            modal.classList.remove('active');
+        }
+        
+        window.onclick = function(event) {
+            const deleteModal = document.getElementById('deleteModal');
+            if (event.target == deleteModal) {
+                closeDeleteModal();
+            }
+        }
+        
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeDeleteModal();
+            }
+        });
+        
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%); color: white; padding: 15px 25px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 9999; animation: slideIn 0.5s ease;';
+            notification.innerHTML = '<i class="fas fa-check-circle"></i> ' + message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.5s ease';
+                setTimeout(() => notification.remove(), 500);
+            }, 3000);
+        }
+    </script>
+    
+    <style>
+        @keyframes slideIn {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(400px); opacity: 0; }
+        }
+    </style>
 </body>
 </html>

@@ -170,4 +170,35 @@ function logActivity($conn, $user_type, $user_id, $action, $details = '') {
     $stmt->execute();
     $stmt->close();
 }
+
+
+
+// Check if studio is active (after requireStudioLogin function)
+function checkStudioStatus($conn) {
+    if (isset($_SESSION['studio_id'])) {
+        $studio_id = $_SESSION['studio_id'];
+        $stmt = $conn->prepare("SELECT status FROM studios WHERE studio_id = ?");
+        $stmt->bind_param("i", $studio_id);
+        $stmt->execute();
+        $result = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        
+        if ($result && $result['status'] == 'inactive') {
+            return false; // Studio is inactive
+        }
+    }
+    return true; // Studio is active
+}
+
+// Require studio to be active for actions
+function requireActiveStudio($conn) {
+    requireStudioLogin();
+    
+    if (!checkStudioStatus($conn)) {
+        $_SESSION['status_error'] = "Your studio account has been deactivated by admin. Please contact administrator.";
+        header("Location: dashboard.php");
+        exit();
+    }
+}
+
 ?>
