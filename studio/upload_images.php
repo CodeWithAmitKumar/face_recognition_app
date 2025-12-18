@@ -2,16 +2,10 @@
 require_once '../config.php';
 require_once '../functions.php';
 require_once '../phpqrcode/qrlib.php';
-
 requireStudioLogin();
 
 $studio_id = $_SESSION['studio_id'];
 $album_id = isset($_GET['album_id']) ? intval($_GET['album_id']) : 0;
-
-// Check studio status for POST actions only
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    requireActiveStudio($conn); // ADD THIS
-}
 
 if ($album_id <= 0) {
     header("Location: select_album.php");
@@ -40,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['images'])) {
     $error_count = 0;
     
     $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif'];
-    $upload_folder = "../uploads/albums/" . $album_id . "/";
+    $upload_folder = ALBUMS_PATH . $album_id . "/";
     
     // Create folder if not exists
     if (!file_exists($upload_folder)) {
@@ -83,16 +77,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['images'])) {
         // Generate QR code if not exists
         if (empty($album['qr_code'])) {
             $shareable_link = BASE_URL . "user/search.php?album=" . $album_id;
-            $qr_filename = "../uploads/qrcodes/album_" . $album_id . ".png";
+            $qr_filename = "album_" . $album_id . ".png";
+            $qr_filepath = QRCODES_PATH . $qr_filename;
             
-            if (!file_exists('../uploads/qrcodes')) {
-                mkdir('../uploads/qrcodes', 0755, true);
-            }
-            
-            QRcode::png($shareable_link, $qr_filename, QR_ECLEVEL_L, 10);
+            QRcode::png($shareable_link, $qr_filepath, QR_ECLEVEL_L, 10);
             
             // Update album with QR code and link
-            $qr_relative_path = "uploads/qrcodes/album_" . $album_id . ".png";
+            $qr_relative_path = "uploads/qrcodes/" . $qr_filename;
             $update_stmt = $conn->prepare("UPDATE albums SET qr_code = ?, shareable_link = ? WHERE album_id = ?");
             $update_stmt->bind_param("ssi", $qr_relative_path, $shareable_link, $album_id);
             $update_stmt->execute();

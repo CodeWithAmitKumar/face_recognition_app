@@ -1,8 +1,8 @@
 <?php
 require_once '../config.php';
 require_once '../functions.php';
-// requireStudioLogin();
-requireActiveStudio($conn); // ADD THIS LINE
+requireActiveStudio($conn);
+
 $studio_id = $_SESSION['studio_id'];
 
 if (isset($_GET['id']) && isset($_GET['confirm']) && $_GET['confirm'] == 'yes') {
@@ -24,17 +24,17 @@ if (isset($_GET['id']) && isset($_GET['confirm']) && $_GET['confirm'] == 'yes') 
         // Delete all album files
         while ($album = $albums_result->fetch_assoc()) {
             // Delete cover image
-            if ($album['cover_image'] && file_exists("../" . $album['cover_image'])) {
-                unlink("../" . $album['cover_image']);
+            if ($album['cover_image'] && file_exists(ROOT_PATH . $album['cover_image'])) {
+                unlink(ROOT_PATH . $album['cover_image']);
             }
             
             // Delete QR code
-            if ($album['qr_code'] && file_exists("../" . $album['qr_code'])) {
-                unlink("../" . $album['qr_code']);
+            if ($album['qr_code'] && file_exists(ROOT_PATH . $album['qr_code'])) {
+                unlink(ROOT_PATH . $album['qr_code']);
             }
             
             // Delete album folder
-            $album_folder = "../uploads/albums/" . $album['album_id'] . "/";
+            $album_folder = ALBUMS_PATH . $album['album_id'] . "/";
             if (file_exists($album_folder)) {
                 $files = glob($album_folder . "*");
                 foreach ($files as $file) {

@@ -1,9 +1,7 @@
 <?php
 require_once '../config.php';
 require_once '../functions.php';
-requireActiveStudio($conn); // ADD THIS LINE
-
-// requireStudioLogin();
+requireStudioLogin();
 
 $studio_id = $_SESSION['studio_id'];
 $success = '';
@@ -39,18 +37,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 if ($imageinfo === false) {
                     $error = "File is not a valid image.";
                 } else {
-                    $cover_filename = "uploads/covers/cover_" . uniqid() . '.' . $file_extension;
+                    $cover_filename = "cover_" . uniqid() . '.' . $file_extension;
+                    $cover_filepath = COVERS_PATH . $cover_filename;
+                    $cover_relative = "uploads/covers/" . $cover_filename;
                     
-                    if (move_uploaded_file($_FILES['cover_image']['tmp_name'], "../" . $cover_filename)) {
+                    if (move_uploaded_file($_FILES['cover_image']['tmp_name'], $cover_filepath)) {
                         // Insert album into database
                         $stmt = $conn->prepare("INSERT INTO albums (studio_id, customer_id, album_name, cover_image) VALUES (?, ?, ?, ?)");
-                        $stmt->bind_param("iiss", $studio_id, $customer_id, $album_name, $cover_filename);
+                        $stmt->bind_param("iiss", $studio_id, $customer_id, $album_name, $cover_relative);
                         
                         if ($stmt->execute()) {
                             $album_id = $stmt->insert_id;
                             
                             // Create album folder
-                            $album_folder = "../uploads/albums/" . $album_id;
+                            $album_folder = ALBUMS_PATH . $album_id;
                             if (!file_exists($album_folder)) {
                                 mkdir($album_folder, 0755, true);
                             }
