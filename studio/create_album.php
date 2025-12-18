@@ -7,52 +7,68 @@ $studio_id = $_SESSION['studio_id'];
 $success = '';
 $error = '';
 
+// Get all customers for this studio
+$customers_query = $conn->prepare("SELECT customer_id, customer_name, email FROM customers WHERE studio_id = ? ORDER BY customer_name ASC");
+$customers_query->bind_param("i", $studio_id);
+$customers_query->execute();
+$customers = $customers_query->get_result();
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $customer_id = intval($_POST['customer_id']);
     $album_name = clean_input($_POST['album_name']);
     
-    // Validate and upload cover image
-    if (isset($_FILES['cover_image']) && $_FILES['cover_image']['error'] == 0) {
-        $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif'];
-        $file_extension = strtolower(pathinfo($_FILES['cover_image']['name'], PATHINFO_EXTENSION));
-        
-        if (!in_array($file_extension, $allowed_extensions)) {
-            $error = "Invalid file type. Please upload JPG, JPEG, PNG, or GIF.";
-        } else {
-            $imageinfo = getimagesize($_FILES['cover_image']['tmp_name']);
+    // Verify customer belongs to this studio
+    $verify = $conn->prepare("SELECT customer_id FROM customers WHERE customer_id = ? AND studio_id = ?");
+    $verify->bind_param("ii", $customer_id, $studio_id);
+    $verify->execute();
+    if ($verify->get_result()->num_rows == 0) {
+        $error = "Invalid customer selected.";
+    } else {
+        // Validate and upload cover image
+        if (isset($_FILES['cover_image']) && $_FILES['cover_image']['error'] == 0) {
+            $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif'];
+            $file_extension = strtolower(pathinfo($_FILES['cover_image']['name'], PATHINFO_EXTENSION));
             
-            if ($imageinfo === false) {
-                $error = "File is not a valid image.";
+            if (!in_array($file_extension, $allowed_extensions)) {
+                $error = "Invalid file type. Please upload JPG, JPEG, PNG, or GIF.";
             } else {
-                $cover_filename = "uploads/covers/cover_" . uniqid() . '.' . $file_extension;
+                $imageinfo = getimagesize($_FILES['cover_image']['tmp_name']);
                 
-                if (move_uploaded_file($_FILES['cover_image']['tmp_name'], "../" . $cover_filename)) {
-                    // Insert album into database
-                    $stmt = $conn->prepare("INSERT INTO albums (studio_id, album_name, cover_image) VALUES (?, ?, ?)");
-                    $stmt->bind_param("iss", $studio_id, $album_name, $cover_filename);
-                    
-                    if ($stmt->execute()) {
-                        $album_id = $stmt->insert_id;
-                        
-                        // Create album folder
-                        $album_folder = "../uploads/albums/" . $album_id;
-                        if (!file_exists($album_folder)) {
-                            mkdir($album_folder, 0755, true);
-                        }
-                        
-                        $stmt->close();
-                        header("Location: upload_images.php?album_id=" . $album_id);
-                        exit();
-                    } else {
-                        $error = "Error creating album: " . $stmt->error;
-                    }
+                if ($imageinfo === false) {
+                    $error = "File is not a valid image.";
                 } else {
-                    $error = "Failed to upload cover image.";
+                    $cover_filename = "uploads/covers/cover_" . uniqid() . '.' . $file_extension;
+                    
+                    if (move_uploaded_file($_FILES['cover_image']['tmp_name'], "../" . $cover_filename)) {
+                        // Insert album into database
+                        $stmt = $conn->prepare("INSERT INTO albums (studio_id, customer_id, album_name, cover_image) VALUES (?, ?, ?, ?)");
+                        $stmt->bind_param("iiss", $studio_id, $customer_id, $album_name, $cover_filename);
+                        
+                        if ($stmt->execute()) {
+                            $album_id = $stmt->insert_id;
+                            
+                            // Create album folder
+                            $album_folder = "../uploads/albums/" . $album_id;
+                            if (!file_exists($album_folder)) {
+                                mkdir($album_folder, 0755, true);
+                            }
+                            
+                            $stmt->close();
+                            header("Location: upload_images.php?album_id=" . $album_id);
+                            exit();
+                        } else {
+                            $error = "Error creating album: " . $stmt->error;
+                        }
+                    } else {
+                        $error = "Failed to upload cover image.";
+                    }
                 }
             }
+        } else {
+            $error = "Please select a cover image.";
         }
-    } else {
-        $error = "Please select a cover image.";
     }
+    $verify->close();
 }
 ?>
 <!DOCTYPE html>
@@ -167,6 +183,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             gap: 10px;
         }
         
+        .warning-box {
+            background: #fff9e6;
+            border-left: 4px solid #f39c12;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            color: #856404;
+        }
+        
+        .warning-box a {
+            color: #667eea;
+            font-weight: 600;
+            text-decoration: none;
+        }
+        
+        .warning-box a:hover {
+            text-decoration: underline;
+        }
+        
         .form-group {
             margin-bottom: 30px;
         }
@@ -184,6 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             margin-right: 8px;
         }
         
+        select,
         input[type="text"] {
             width: 100%;
             padding: 15px;
@@ -193,6 +229,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             transition: all 0.3s ease;
         }
         
+        select:focus,
         input:focus {
             outline: none;
             border-color: #667eea;
@@ -303,6 +340,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         </div>
         <div class="navbar-menu">
             <a href="dashboard.php"><i class="fas fa-home"></i> Dashboard</a>
+            <a href="manage_customers.php"><i class="fas fa-users"></i> Customers</a>
             <a href="create_album.php"><i class="fas fa-plus"></i> Create Album</a>
             <a href="select_album.php"><i class="fas fa-folder"></i> My Albums</a>
             <a href="profile.php"><i class="fas fa-user"></i> Profile</a>
@@ -317,8 +355,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     <i class="fas fa-folder-plus"></i>
                 </div>
                 <h1>Create New Album</h1>
-                <p class="subtitle">Start organizing your event photos</p>
+                <p class="subtitle">Select customer and create their photo album</p>
             </div>
+            
+            <?php if (mysqli_num_rows($customers) == 0): ?>
+                <div class="warning-box">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>No customers found!</strong> You need to add a customer first before creating an album.
+                    <br><br>
+                    <a href="add_customer.php"><i class="fas fa-user-plus"></i> Add Customer Now</a>
+                </div>
+            <?php else: ?>
             
             <?php if ($error): ?>
                 <div class="error">
@@ -328,6 +375,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             <?php endif; ?>
             
             <form method="POST" enctype="multipart/form-data" id="albumForm">
+                <div class="form-group">
+                    <label><i class="fas fa-user"></i> Select Customer</label>
+                    <select name="customer_id" required>
+                        <option value="">-- Choose Customer --</option>
+                        <?php while($customer = mysqli_fetch_assoc($customers)): ?>
+                            <option value="<?php echo $customer['customer_id']; ?>">
+                                <?php echo htmlspecialchars($customer['customer_name']); ?> 
+                                (<?php echo htmlspecialchars($customer['email']); ?>)
+                            </option>
+                        <?php endwhile; ?>
+                    </select>
+                </div>
+                
                 <div class="form-group">
                     <label><i class="fas fa-heading"></i> Album Name</label>
                     <input type="text" name="album_name" placeholder="e.g., Wedding 2024, Birthday Party" required>
@@ -353,6 +413,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     <i class="fas fa-plus-circle"></i> Create Album
                 </button>
             </form>
+            
+            <?php endif; ?>
         </div>
     </div>
     

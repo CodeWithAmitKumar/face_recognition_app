@@ -1,6 +1,18 @@
 <?php
-require_once 'config.php';
-require_once 'functions.php';
+session_start();
+require_once '../config.php';
+require_once '../functions.php';
+
+// Redirect if already logged in
+if (isset($_SESSION['user_type'])) {
+    if ($_SESSION['user_type'] == 'customer') {
+        header("Location: dashboard.php");
+        exit();
+    } else {
+        header("Location: ../studio/dashboard.php");
+        exit();
+    }
+}
 
 $error = '';
 
@@ -8,31 +20,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $email = clean_input($_POST['email']);
     $password = $_POST['password'];
     
-    // Check in studios table first
-    $stmt = $conn->prepare("SELECT * FROM studios WHERE email = ?");
-    $stmt->bind_param("s", $email);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result->num_rows > 0) {
-        $studio = $result->fetch_assoc();
-        if (password_verify($password, $studio['password'])) {
-            $_SESSION['user_type'] = 'studio';
-            $_SESSION['studio_id'] = $studio['studio_id'];
-            $_SESSION['studio_name'] = $studio['studio_name'];
-            $_SESSION['email'] = $studio['email'];
-            
-            // Update last login
-            $update = $conn->prepare("UPDATE studios SET last_login = NOW() WHERE studio_id = ?");
-            $update->bind_param("i", $studio['studio_id']);
-            $update->execute();
-            
-            header("Location: studio/dashboard.php");
-            exit();
-        }
-    }
-    
-    // Check in customers table
     $stmt = $conn->prepare("SELECT * FROM customers WHERE email = ?");
     $stmt->bind_param("s", $email);
     $stmt->execute();
@@ -47,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['studio_id'] = $customer['studio_id'];
             $_SESSION['email'] = $customer['email'];
             
-            header("Location: customer/dashboard.php");
+            header("Location: dashboard.php");
             exit();
         }
     }
@@ -61,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Face Recognition System</title>
+    <title>Customer Login</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * {
@@ -213,8 +200,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             <div class="logo-icon">
                 <i class="fas fa-user-circle"></i>
             </div>
-            <h1>Welcome Back</h1>
-            <p class="subtitle">Studio & Customer Login</p>
+            <h1>Customer Login</h1>
+            <p class="subtitle">Access your photo albums</p>
         </div>
         
         <?php if ($error): ?>
@@ -241,7 +228,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         </form>
         
         <div class="links">
-            <a href="index.php"><i class="fas fa-arrow-left"></i> Back to Home</a>
+            <a href="../index.php"><i class="fas fa-arrow-left"></i> Back to Home</a>
         </div>
     </div>
 </body>
