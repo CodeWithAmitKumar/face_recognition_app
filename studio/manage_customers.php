@@ -3,7 +3,9 @@ require_once '../config.php';
 require_once '../functions.php';
 requireStudioLogin();
 
+
 $studio_id = $_SESSION['studio_id'];
+
 
 // Get all customers for this studio
 $sql = "SELECT c.*, COUNT(a.album_id) as album_count 
@@ -14,11 +16,12 @@ $sql = "SELECT c.*, COUNT(a.album_id) as album_count
         ORDER BY c.created_at DESC";
 $result = mysqli_query($conn, $sql);
 
+
 $delete_success = isset($_GET['deleted']) && $_GET['deleted'] == 'success';
 $created_success = isset($_GET['created']) && $_GET['created'] == 'success';
 $customer_data = isset($_SESSION['customer_created']) ? $_SESSION['customer_created'] : null;
-if ($customer_data) {
-    unset($_SESSION['customer_created']);
+if ($created_success && $customer_data) {
+    // Don't unset yet - will unset after displaying
 }
 ?>
 <!DOCTYPE html>
@@ -125,8 +128,8 @@ if ($customer_data) {
         .success-message {
             background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
             color: white;
-            padding: 20px 25px;
-            border-radius: 10px;
+            padding: 25px 30px;
+            border-radius: 15px;
             margin-bottom: 30px;
             animation: slideDown 0.5s ease;
         }
@@ -136,25 +139,46 @@ if ($customer_data) {
             to { opacity: 1; transform: translateY(0); }
         }
         
+        .email-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 20px;
+            border-radius: 10px;
+            margin-top: 15px;
+            font-size: 15px;
+        }
+        
+        .email-sent {
+            background: rgba(255,255,255,0.25);
+            border: 2px solid rgba(255,255,255,0.5);
+        }
+        
+        .email-failed {
+            background: rgba(255,152,0,0.3);
+            border: 2px solid rgba(255,152,0,0.6);
+        }
+        
         .credentials-box {
-            background: white;
+            background: rgba(255,255,255,0.2);
             padding: 20px;
             border-radius: 10px;
             margin-top: 15px;
-            border: 2px solid #27ae60;
+            border: 2px solid rgba(255,255,255,0.3);
         }
         
         .credentials-box h3 {
             margin-bottom: 15px;
-            color: #333;
+            color: white;
+            font-size: 18px;
         }
         
         .credential-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px;
-            background: #f8f9fa;
+            padding: 12px 15px;
+            background: rgba(255,255,255,0.95);
             margin-bottom: 10px;
             border-radius: 8px;
         }
@@ -169,13 +193,20 @@ if ($customer_data) {
             font-size: 16px;
             color: #333;
             background: white;
-            padding: 5px 15px;
+            padding: 6px 15px;
             border-radius: 5px;
-            border: 1px solid #e0e0e0;
+            border: 2px solid #e0e0e0;
+            font-weight: 600;
+        }
+        
+        .credential-value.password {
+            background: #fff3cd;
+            border-color: #f39c12;
+            color: #856404;
         }
         
         .copy-btn {
-            padding: 5px 15px;
+            padding: 6px 15px;
             background: #667eea;
             color: white;
             border: none;
@@ -183,10 +214,23 @@ if ($customer_data) {
             cursor: pointer;
             font-size: 12px;
             margin-left: 10px;
+            font-weight: 600;
+            transition: all 0.3s;
         }
         
         .copy-btn:hover {
             background: #5568d3;
+            transform: scale(1.05);
+        }
+        
+        .warning-note {
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(255,243,205,0.3);
+            border-radius: 8px;
+            font-size: 13px;
+            color: #fff;
+            border: 2px solid rgba(255,193,7,0.5);
         }
         
         .customers-table {
@@ -460,21 +504,40 @@ if ($customer_data) {
     <div class="container">
         <?php if ($delete_success): ?>
             <div class="success-message">
-                <i class="fas fa-check-circle" style="font-size: 24px;"></i>
-                <span>Customer deleted successfully!</span>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-check-circle" style="font-size: 24px;"></i>
+                    <span style="font-size: 18px; font-weight: 600;">Customer deleted successfully!</span>
+                </div>
             </div>
         <?php endif; ?>
         
         <?php if ($created_success && $customer_data): ?>
             <div class="success-message">
                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-                    <i class="fas fa-check-circle" style="font-size: 24px;"></i>
-                    <span style="font-size: 18px; font-weight: 600;">Customer Account Created Successfully!</span>
+                    <i class="fas fa-check-circle" style="font-size: 28px;"></i>
+                    <span style="font-size: 20px; font-weight: 700;">Customer Account Created Successfully!</span>
                 </div>
+                
+                <?php if (isset($customer_data['email_sent']) && $customer_data['email_sent']): ?>
+                    <div class="email-status email-sent">
+                        <i class="fas fa-envelope-circle-check" style="font-size: 20px;"></i>
+                        <div>
+                            <strong>✅ Credentials Email Sent Successfully!</strong><br>
+                            <small>Login details have been sent to: <strong><?php echo htmlspecialchars($customer_data['email']); ?></strong></small>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <div class="email-status email-failed">
+                        <i class="fas fa-triangle-exclamation" style="font-size: 20px;"></i>
+                        <div>
+                            <strong>⚠️ Email Sending Failed</strong><br>
+                            <small>Please share the credentials manually with the customer</small>
+                        </div>
+                    </div>
+                <?php endif; ?>
                 
                 <div class="credentials-box">
                     <h3><i class="fas fa-key"></i> Login Credentials</h3>
-                    <p style="color: #666; margin-bottom: 15px; font-size: 14px;">Share these credentials with the customer securely</p>
                     
                     <div class="credential-item">
                         <span class="credential-label">Customer Name:</span>
@@ -489,15 +552,19 @@ if ($customer_data) {
                     
                     <div class="credential-item">
                         <span class="credential-label">Password:</span>
-                        <span class="credential-value" id="password" style="background: #fff3cd; border-color: #f39c12;"><?php echo htmlspecialchars($customer_data['password']); ?></span>
+                        <span class="credential-value password" id="password"><?php echo htmlspecialchars($customer_data['password']); ?></span>
                         <button class="copy-btn" onclick="copyText('password')"><i class="fas fa-copy"></i> Copy</button>
                     </div>
                     
-                    <div style="margin-top: 15px; padding: 10px; background: #fff9e6; border-radius: 8px; font-size: 13px; color: #856404;">
-                        <i class="fas fa-exclamation-triangle"></i> <strong>Important:</strong> Save this password now! It won't be shown again.
+                    <div class="warning-note">
+                        <i class="fas fa-exclamation-circle"></i> <strong>Important:</strong> Save this password now! It won't be shown again. 
+                        <?php if (!isset($customer_data['email_sent']) || !$customer_data['email_sent']): ?>
+                            Make sure to share these credentials with the customer.
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
+            <?php unset($_SESSION['customer_created']); ?>
         <?php endif; ?>
         
         <div class="header">

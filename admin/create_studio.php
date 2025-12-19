@@ -1,7 +1,14 @@
 <?php
 require_once '../config.php';
 require_once '../functions.php';
+require_once '../email_config.php'; // ✅ Email config
 requireAdminLogin();
+
+// ✅ Load PHPMailer
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+require '../vendor/autoload.php'; // Composer autoload
 
 $success = '';
 $error = '';
@@ -30,18 +37,148 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($check_email->get_result()->num_rows > 0) {
         $error = "Email already exists!";
     } else {
-        // Insert studio - ONLY stores hashed password
+        // Insert studio
         $stmt = $conn->prepare("INSERT INTO studios (owner_name, studio_name, email, password, address_at, address_po, district, state, pin_code, whatsapp_no, contact_no) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->bind_param("sssssssssss", $owner_name, $studio_name, $email, $hashed_password, $address_at, $address_po, $district, $state, $pin_code, $whatsapp_no, $contact_no);
         
         if ($stmt->execute()) {
-            $success = "Studio created successfully!<br>Email: <strong>$email</strong><br>Password: <strong>$plain_password</strong><br><small style='color:#e74c3c;'>(⚠️ Save this password - it won't be shown again!)</small>";
+            // ✅ Send email with PHPMailer
+            $email_sent = sendCredentialsEmailPHPMailer($email, $owner_name, $studio_name, $plain_password);
+            
+            if ($email_sent) {
+                $success = "Studio created successfully!<br>
+                           <strong>✅ Credentials sent to: $email</strong><br><br>
+                           <div style='background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px; margin-top: 10px;'>
+                           <strong>Login Details:</strong><br>
+                           Email: <strong>$email</strong><br>
+                           Password: <strong>$plain_password</strong><br>
+                           <small style='color:#fff3cd;'>(⚠️ Save this password - it won't be shown again!)</small>
+                           </div>";
+            } else {
+                $success = "Studio created successfully!<br>
+                           <strong>⚠️ Email sending failed - Please share credentials manually:</strong><br><br>
+                           <div style='background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px; margin-top: 10px;'>
+                           Email: <strong>$email</strong><br>
+                           Password: <strong>$plain_password</strong><br>
+                           <small style='color:#fff3cd;'>(⚠️ Save this password - it won't be shown again!)</small>
+                           </div>";
+            }
         } else {
             $error = "Error: " . $stmt->error;
         }
         $stmt->close();
     }
     $check_email->close();
+}
+
+// ✅ PHPMailer Function
+function sendCredentialsEmailPHPMailer($to_email, $owner_name, $studio_name, $password) {
+    $mail = new PHPMailer(true);
+    
+    try {
+        // Server settings
+        $mail->isSMTP();
+        $mail->Host       = SMTP_HOST;
+        $mail->SMTPAuth   = true;
+        $mail->Username   = SMTP_USERNAME;
+        $mail->Password   = SMTP_PASSWORD;
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS; // TLS encryption
+        $mail->Port       = SMTP_PORT;
+        
+        // Recipients
+        $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
+        $mail->addAddress($to_email, $owner_name);
+        $mail->addReplyTo(SMTP_FROM_EMAIL, 'Support Team');
+        
+        // Content
+        $mail->isHTML(true);
+        $mail->Subject = 'Your Studio Account Credentials - ' . $studio_name;
+        
+        $mail->Body = "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; background-color: #f5f6fa; margin: 0; padding: 0; }
+                .container { max-width: 600px; margin: 30px auto; background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
+                .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 30px; text-align: center; }
+                .header h1 { margin: 0; font-size: 28px; }
+                .content { padding: 40px 30px; }
+                .credentials-box { background: #f8f9fa; border-left: 4px solid #667eea; padding: 20px; margin: 25px 0; border-radius: 8px; }
+                .credentials-box h3 { color: #333; margin-top: 0; }
+                .credential-item { margin: 15px 0; }
+                .credential-label { color: #666; font-size: 14px; margin-bottom: 5px; }
+                .credential-value { color: #333; font-size: 18px; font-weight: bold; background: white; padding: 10px 15px; border-radius: 5px; display: inline-block; }
+                .warning-box { background: #fff3cd; border-left: 4px solid #f39c12; padding: 15px; margin: 20px 0; border-radius: 8px; color: #856404; }
+                .btn { display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 10px; margin: 20px 0; font-weight: bold; }
+                .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 14px; }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h1>🎉 Welcome to Photo Album System!</h1>
+                </div>
+                <div class='content'>
+                    <p>Dear <strong>" . htmlspecialchars($owner_name) . "</strong>,</p>
+                    <p>Your studio account has been successfully created! You can now manage your photo albums and customers.</p>
+                    
+                    <div class='credentials-box'>
+                        <h3>🔐 Your Login Credentials</h3>
+                        <div class='credential-item'>
+                            <div class='credential-label'>Studio Name:</div>
+                            <div class='credential-value'>" . htmlspecialchars($studio_name) . "</div>
+                        </div>
+                        <div class='credential-item'>
+                            <div class='credential-label'>Email (User ID):</div>
+                            <div class='credential-value'>" . htmlspecialchars($to_email) . "</div>
+                        </div>
+                        <div class='credential-item'>
+                            <div class='credential-label'>Password:</div>
+                            <div class='credential-value'>" . htmlspecialchars($password) . "</div>
+                        </div>
+                    </div>
+                    
+                    <div class='warning-box'>
+                        <strong>⚠️ Important Security Notice:</strong><br>
+                        Please save these credentials securely. We recommend changing your password after your first login.
+                    </div>
+                    
+                    <center>
+                        <a href='" . BASE_URL . "studio/login.php' class='btn'>
+                            🔓 Login to Your Dashboard
+                        </a>
+                    </center>
+                    
+                    <p style='margin-top: 30px;'>If you have any questions or need assistance, please contact our support team.</p>
+                    
+                    <p style='color: #666; font-size: 14px; margin-top: 20px;'>
+                        Best regards,<br>
+                        <strong>Photo Album System Team</strong>
+                    </p>
+                </div>
+                <div class='footer'>
+                    <p>This is an automated email. Please do not reply to this message.</p>
+                    <p>&copy; " . date('Y') . " Photo Album System. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
+        
+        $mail->AltBody = "Welcome to Photo Album System!\n\n"
+                       . "Studio Name: $studio_name\n"
+                       . "Email: $to_email\n"
+                       . "Password: $password\n\n"
+                       . "Login at: " . BASE_URL . "studio/login.php";
+        
+        $mail->send();
+        return true;
+        
+    } catch (Exception $e) {
+        error_log("Email Error: {$mail->ErrorInfo}");
+        return false;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -89,6 +226,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             text-decoration: none;
             font-weight: 600;
             transition: 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         
         .navbar-menu a:hover {
@@ -126,12 +266,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         .success {
             background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
             color: white;
-            padding: 20px;
+            padding: 25px;
             border-radius: 10px;
             margin-bottom: 25px;
             text-align: center;
             animation: slideDown 0.5s;
             line-height: 1.8;
+            font-size: 15px;
         }
         
         .error {
@@ -227,6 +368,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         @media (max-width: 768px) {
             .navbar {
                 padding: 15px 20px;
+                flex-direction: column;
+                gap: 15px;
             }
             .navbar-menu {
                 flex-direction: column;
@@ -260,7 +403,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             
             <?php if ($success): ?>
                 <div class="success">
-                    <i class="fas fa-check-circle" style="font-size: 28px;"></i><br>
+                    <i class="fas fa-check-circle" style="font-size: 32px; display: block; margin-bottom: 15px;"></i>
                     <?php echo $success; ?>
                 </div>
             <?php endif; ?>
@@ -291,7 +434,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 
                 <div class="form-group">
                     <label><i class="fas fa-envelope"></i> Email (User ID) <span class="required">*</span></label>
-                    <input type="email" name="email" required>
+                    <input type="email" name="email" required placeholder="studio@example.com">
                 </div>
                 
                 <div class="section-title">
@@ -323,7 +466,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     
                     <div class="form-group">
                         <label><i class="fas fa-hashtag"></i> PIN Code <span class="required">*</span></label>
-                        <input type="text" name="pin_code" pattern="[0-9]{6}" maxlength="6" required>
+                        <input type="text" name="pin_code" pattern="[0-9]{6}" maxlength="6" required placeholder="000000">
                     </div>
                 </div>
                 
@@ -334,17 +477,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 <div class="form-row">
                     <div class="form-group">
                         <label><i class="fab fa-whatsapp"></i> WhatsApp Number <span class="required">*</span></label>
-                        <input type="tel" name="whatsapp_no" pattern="[0-9]{10}" maxlength="10" required>
+                        <input type="tel" name="whatsapp_no" pattern="[0-9]{10}" maxlength="10" required placeholder="9876543210">
                     </div>
                     
                     <div class="form-group">
                         <label><i class="fas fa-phone"></i> Contact Number <span class="required">*</span></label>
-                        <input type="tel" name="contact_no" pattern="[0-9]{10}" maxlength="10" required>
+                        <input type="tel" name="contact_no" pattern="[0-9]{10}" maxlength="10" required placeholder="9876543210">
                     </div>
                 </div>
                 
                 <button type="submit" class="btn-submit">
-                    <i class="fas fa-plus-circle"></i> Create Studio & Generate Password
+                    <i class="fas fa-paper-plane"></i> Create Studio & Send Credentials via Email
                 </button>
             </form>
         </div>

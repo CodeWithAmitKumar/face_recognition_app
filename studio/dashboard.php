@@ -317,9 +317,15 @@ $recent_albums = mysqli_query($conn, "SELECT a.*, COUNT(ai.image_id) as image_co
         </div>
         <div class="navbar-menu">
             <a href="dashboard.php"><i class="fas fa-home"></i> Dashboard</a>
+                        <a href="manage_customers.php"><i class="fas fa-users"></i> Customers</a>
+
             <a href="create_album.php"><i class="fas fa-plus"></i> Create Album</a>
-            <a href="select_album.php"><i class="fas fa-folder"></i> My Albums</a>
+            <a href="view_customer_selections.php">
+               <i class="fas fa-heart"></i> Selections
+               
+           </a>
             <a href="profile.php"><i class="fas fa-user"></i> Profile</a>
+            <a href="select_album.php"><i class="fas fa-folder"></i> My Albums</a>
             <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
         </div>
     </nav>

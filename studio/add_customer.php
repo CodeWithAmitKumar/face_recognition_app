@@ -1,9 +1,17 @@
 <?php
 require_once '../config.php';
 require_once '../functions.php';
+require_once '../email_config.php'; // ✅ Email config
 requireStudioLogin();
 
+// ✅ Load PHPMailer
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+require '../vendor/autoload.php'; // Composer autoload
+
 $studio_id = $_SESSION['studio_id'];
+$studio_name = $_SESSION['studio_name']; // Get studio name for email
 $success = '';
 $error = '';
 
@@ -34,10 +42,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt->bind_param("issssssssss", $studio_id, $customer_name, $email, $hashed_password, $address_at, $address_po, $district, $state, $pin_code, $whatsapp_no, $contact_no);
         
         if ($stmt->execute()) {
+            // ✅ Send email with credentials
+            $email_sent = sendCustomerCredentialsEmail($email, $customer_name, $studio_name, $auto_password);
+            
             $_SESSION['customer_created'] = [
                 'name' => $customer_name,
                 'email' => $email,
-                'password' => $auto_password
+                'password' => $auto_password,
+                'email_sent' => $email_sent
             ];
             header("Location: manage_customers.php?created=success");
             exit();
@@ -47,6 +59,127 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt->close();
     }
     $check->close();
+}
+
+// ✅ PHPMailer Function for Customer Credentials
+function sendCustomerCredentialsEmail($to_email, $customer_name, $studio_name, $password) {
+    $mail = new PHPMailer(true);
+    
+    try {
+        // Server settings
+        $mail->isSMTP();
+        $mail->Host       = SMTP_HOST;
+        $mail->SMTPAuth   = true;
+        $mail->Username   = SMTP_USERNAME;
+        $mail->Password   = SMTP_PASSWORD;
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = SMTP_PORT;
+        
+        // ✅ Recipients - FROM is system email, TO is customer email
+        $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
+        $mail->addAddress($to_email, $customer_name); // ⭐ Customer email (dynamic)
+        $mail->addReplyTo(SMTP_FROM_EMAIL, 'Support Team');
+        
+        // Content
+        $mail->isHTML(true);
+        $mail->Subject = 'Your Photo Album Account is Ready - ' . $studio_name;
+        
+        $mail->Body = "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; background-color: #f5f6fa; margin: 0; padding: 0; }
+                .container { max-width: 600px; margin: 30px auto; background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
+                .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 30px; text-align: center; }
+                .header h1 { margin: 0; font-size: 28px; }
+                .studio-badge { background: rgba(255,255,255,0.2); color: white; padding: 10px 20px; border-radius: 20px; display: inline-block; margin-top: 15px; font-size: 16px; }
+                .content { padding: 40px 30px; }
+                .credentials-box { background: #f8f9fa; border-left: 4px solid #667eea; padding: 20px; margin: 25px 0; border-radius: 8px; }
+                .credentials-box h3 { color: #333; margin-top: 0; }
+                .credential-item { margin: 15px 0; }
+                .credential-label { color: #666; font-size: 14px; margin-bottom: 5px; }
+                .credential-value { color: #333; font-size: 18px; font-weight: bold; background: white; padding: 10px 15px; border-radius: 5px; display: inline-block; }
+                .warning-box { background: #fff3cd; border-left: 4px solid #f39c12; padding: 15px; margin: 20px 0; border-radius: 8px; color: #856404; }
+                .btn { display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 10px; margin: 20px 0; font-weight: bold; }
+                .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 14px; }
+                .features { background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0; }
+                .features h3 { color: #333; margin-top: 0; }
+                .features ul { list-style: none; padding: 0; }
+                .features li { padding: 8px 0; color: #666; }
+                .features li:before { content: '✓ '; color: #2ecc71; font-weight: bold; margin-right: 8px; }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h1>🎉 Welcome to Photo Album!</h1>
+                    <div class='studio-badge'>
+                        📸 " . htmlspecialchars($studio_name) . "
+                    </div>
+                </div>
+                <div class='content'>
+                    <p>Dear <strong>" . htmlspecialchars($customer_name) . "</strong>,</p>
+                    <p>Your photo album account has been created by <strong>" . htmlspecialchars($studio_name) . "</strong>! You can now view and download your event photos.</p>
+                    
+                    <div class='credentials-box'>
+                        <h3>🔐 Your Login Credentials</h3>
+                        <div class='credential-item'>
+                            <div class='credential-label'>Email (User ID):</div>
+                            <div class='credential-value'>" . htmlspecialchars($to_email) . "</div>
+                        </div>
+                        <div class='credential-item'>
+                            <div class='credential-label'>Password:</div>
+                            <div class='credential-value'>" . htmlspecialchars($password) . "</div>
+                        </div>
+                        <div class='credential-item'>
+                            <div class='credential-label'>Studio:</div>
+                            <div class='credential-value'>" . htmlspecialchars($studio_name) . "</div>
+                        </div>
+                    </div>
+                    
+                   
+                    <div class='warning-box'>
+                        <strong>⚠️ Security Notice:</strong><br>
+                        Please keep your credentials safe. You can change your password after logging in.
+                    </div>
+                    
+                    <center>
+                        <a href='" . BASE_URL . "customer/login.php' class='btn'>
+                            🔓 Login to Your Account
+                        </a>
+                    </center>
+                    
+                    <p style='margin-top: 30px;'><strong>Need Help?</strong><br>
+                    Contact your studio: <strong>" . htmlspecialchars($studio_name) . "</strong></p>
+                    
+                    <p style='color: #666; font-size: 14px; margin-top: 20px;'>
+                        Best regards,<br>
+                        <strong>" . htmlspecialchars($studio_name) . " Team</strong>
+                    </p>
+                </div>
+                <div class='footer'>
+                    <p>📧 This email was sent to: " . htmlspecialchars($to_email) . "</p>
+                    <p>&copy; " . date('Y') . " Photo Album System. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
+        
+        $mail->AltBody = "Welcome to Photo Album System!\n\n"
+                       . "Studio: $studio_name\n"
+                       . "Your Email: $to_email\n"
+                       . "Password: $password\n\n"
+                       . "Login at: " . BASE_URL . "customer/login.php";
+        
+        $mail->send();
+        return true;
+        
+    } catch (Exception $e) {
+        error_log("Email Error: {$mail->ErrorInfo}");
+        return false;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -162,17 +295,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
         
         .info-box {
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 15px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
             border-radius: 10px;
             margin-bottom: 30px;
-            color: #856404;
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
         
         .info-box i {
-            color: #ffc107;
-            margin-right: 10px;
+            font-size: 28px;
         }
         
         .form-row {
@@ -286,8 +420,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             </div>
             
             <div class="info-box">
-                <i class="fas fa-exclamation-triangle"></i>
-                <strong>Important:</strong> A 6-digit password will be auto-generated. It will be shown ONCE on the next page. Make sure to save it!
+                <i class="fas fa-envelope"></i>
+                <div>
+                    <strong>📧 Email Notification Enabled!</strong><br>
+                    <small>Login credentials will be automatically sent to the customer's email address.</small>
+                </div>
             </div>
             
             <?php if ($error): ?>
@@ -364,7 +501,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 </div>
                 
                 <button type="submit" class="btn-submit">
-                    <i class="fas fa-user-plus"></i> Create Customer Account
+                    <i class="fas fa-paper-plane"></i> Create Account & Send Email
                 </button>
             </form>
         </div>
