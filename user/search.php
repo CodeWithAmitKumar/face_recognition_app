@@ -38,7 +38,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
             if ($imageinfo === false) {
                 $error = "File is not a valid image.";
             } else {
-                $temp_image = "../uploads/search_temp/" . uniqid('search_', true) . '.jpg';
+                // Generate filename ONLY
+                $filename = uniqid('search_', true) . '.jpg';
+                $temp_image = "../uploads/search_temp/" . $filename;  // Full path for file operations
                 
                 if (move_uploaded_file($_FILES['user_photo']['tmp_name'], $temp_image)) {
                     $album_folder = "../uploads/albums/" . $album_id . "/";
@@ -58,8 +60,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
                         $matches = $result['matches'];
                         
                         $match_count = count($matches);
+                        
+                        // Save ONLY filename in database (not full path)
                         $stmt = $conn->prepare("INSERT INTO search_logs (album_id, search_image, matches_found) VALUES (?, ?, ?)");
-                        $stmt->bind_param("isi", $album_id, $temp_image, $match_count);
+                        $stmt->bind_param("isi", $album_id, $filename, $match_count);  // ✅ Using $filename instead of $temp_image
                         $stmt->execute();
                         $stmt->close();
                     } elseif ($result && isset($result['error'])) {
@@ -157,6 +161,85 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
             margin: 0 auto 50px;
         }
         
+        /* IMAGE PREVIEW STYLES */
+        .preview-container {
+            display: none;
+            margin-bottom: 30px;
+            text-align: center;
+            animation: slideDown 0.5s ease;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .preview-container.active {
+            display: block;
+        }
+        
+        .preview-header {
+            font-size: 18px;
+            color: #667eea;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        
+        .preview-image-wrapper {
+            position: relative;
+            display: inline-block;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        #previewImage {
+            max-width: 100%;
+            max-height: 400px;
+            display: block;
+            border-radius: 15px;
+        }
+        
+        .remove-preview-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(231, 76, 60, 0.9);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        
+        .remove-preview-btn:hover {
+            background: #c0392b;
+            transform: scale(1.1);
+        }
+        
+        .preview-filename {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: #f8f9fa;
+            border-radius: 20px;
+            color: #666;
+            font-size: 14px;
+            display: inline-block;
+        }
+        
         .upload-container {
             position: relative;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -212,17 +295,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
             font-size: 16px;
             margin-bottom: 25px;
             pointer-events: none;
-        }
-        
-        .file-preview {
-            margin-top: 20px;
-            padding: 15px 25px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 50px;
-            color: white;
-            font-weight: 600;
-            display: none;
-            backdrop-filter: blur(10px);
         }
         
         .btn-search {
@@ -321,7 +393,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
             display: inline-flex;
             align-items: center;
             gap: 10px;
-            text-decoration: none;
         }
         
         .download-all-btn:hover {
@@ -524,17 +595,30 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
         </div>
         
         <div class="upload-section">
+            <!-- IMAGE PREVIEW SECTION -->
+            <div class="preview-container" id="previewContainer">
+                <div class="preview-header">
+                    <i class="fas fa-eye"></i> Preview
+                </div>
+                <div class="preview-image-wrapper">
+                    <img id="previewImage" src="" alt="Preview">
+                    <button type="button" class="remove-preview-btn" onclick="removePreview()" title="Remove image">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="preview-filename" id="previewFilename"></div>
+            </div>
+            
             <form method="POST" enctype="multipart/form-data" id="searchForm">
                 <div class="upload-container" id="uploadContainer">
                     <label for="user_photo" class="file-input-wrapper">
-                        <input type="file" id="user_photo" name="user_photo" accept="image/*" required>
+                        <input type="file" id="user_photo" name="user_photo" accept="image/*" required onchange="handleFileSelect(event)">
                         <div class="upload-icon">
                             <i class="fas fa-camera"></i>
                         </div>
                         <div class="upload-text">Upload Your Photo</div>
                         <div class="upload-subtext">Click or drag & drop your photo here</div>
                     </label>
-                    <div class="file-preview" id="filePreview"></div>
                 </div>
                 <button type="submit" class="btn-search" id="submitBtn">
                     <i class="fas fa-search"></i> Search for Matches
@@ -589,21 +673,47 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
     
     <script>
         const fileInput = document.getElementById('user_photo');
-        const filePreview = document.getElementById('filePreview');
         const uploadContainer = document.getElementById('uploadContainer');
         const searchForm = document.getElementById('searchForm');
         const loading = document.getElementById('loading');
         const submitBtn = document.getElementById('submitBtn');
+        const previewContainer = document.getElementById('previewContainer');
+        const previewImage = document.getElementById('previewImage');
+        const previewFilename = document.getElementById('previewFilename');
         
-        fileInput.addEventListener('change', function(e) {
-            if (e.target.files.length > 0) {
-                const fileName = e.target.files[0].name;
-                filePreview.innerHTML = '<i class="fas fa-check-circle"></i> ' + fileName;
-                filePreview.style.display = 'block';
-                submitBtn.disabled = false;
+        // Handle file selection with preview
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    previewImage.src = e.target.result;
+                    previewFilename.innerHTML = '<i class="fas fa-file-image"></i> ' + file.name;
+                    previewContainer.classList.add('active');
+                    uploadContainer.style.display = 'none';
+                    submitBtn.disabled = false;
+                }
+                
+                reader.readAsDataURL(file);
+            } else {
+                alert('Please select a valid image file!');
+                fileInput.value = '';
             }
-        });
+        }
         
+        // Remove preview and show upload container again
+        function removePreview() {
+            fileInput.value = '';
+            previewContainer.classList.remove('active');
+            uploadContainer.style.display = 'block';
+            previewImage.src = '';
+            previewFilename.innerHTML = '';
+            submitBtn.disabled = true;
+        }
+        
+        // Drag and drop functionality
         uploadContainer.addEventListener('dragover', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -623,13 +733,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
             
             if (e.dataTransfer.files.length > 0) {
                 fileInput.files = e.dataTransfer.files;
-                const fileName = e.dataTransfer.files[0].name;
-                filePreview.innerHTML = '<i class="fas fa-check-circle"></i> ' + fileName;
-                filePreview.style.display = 'block';
-                submitBtn.disabled = false;
+                handleFileSelect({ target: { files: e.dataTransfer.files } });
             }
         });
         
+        // Form submit with loading
         searchForm.addEventListener('submit', function(e) {
             if (!fileInput.files || fileInput.files.length === 0) {
                 e.preventDefault();
@@ -639,6 +747,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
             loading.classList.add('active');
         });
         
+        // Prevent default drag/drop on whole page
         document.addEventListener('dragover', (e) => e.preventDefault());
         document.addEventListener('drop', (e) => e.preventDefault());
         

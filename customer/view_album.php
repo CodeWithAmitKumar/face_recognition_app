@@ -3,13 +3,16 @@ require_once '../config.php';
 require_once '../functions.php';
 requireCustomerLogin();
 
+
 $customer_id = $_SESSION['customer_id'];
 $album_id = isset($_GET['album_id']) ? intval($_GET['album_id']) : 0;
+
 
 if ($album_id <= 0) {
     header("Location: dashboard.php");
     exit();
 }
+
 
 // Verify album belongs to this customer
 $stmt = $conn->prepare("SELECT a.*, s.studio_name FROM albums a JOIN studios s ON a.studio_id = s.studio_id WHERE a.album_id = ? AND a.customer_id = ?");
@@ -17,13 +20,16 @@ $stmt->bind_param("ii", $album_id, $customer_id);
 $stmt->execute();
 $album_result = $stmt->get_result();
 
+
 if ($album_result->num_rows == 0) {
     header("Location: dashboard.php");
     exit();
 }
 
+
 $album = $album_result->fetch_assoc();
 $stmt->close();
+
 
 // Get all images for this album
 $images_query = $conn->prepare("SELECT * FROM album_images WHERE album_id = ? ORDER BY uploaded_at DESC");
@@ -400,14 +406,14 @@ $images = $images_query->get_result();
                 <div class="images-grid">
                     <?php $index = 0; while($image = mysqli_fetch_assoc($images)): ?>
                         <div class="image-card" onclick="openLightbox(<?php echo $index; ?>)">
-                            <img src="../<?php echo htmlspecialchars($image['image_path']); ?>" 
+                            <img src="../uploads/albums/<?php echo $album_id . '/' . htmlspecialchars($image['image_path']); ?>" 
                                  alt="Album Image"
-                                 data-src="../<?php echo htmlspecialchars($image['image_path']); ?>">
+                                 data-src="../uploads/albums/<?php echo $album_id . '/' . htmlspecialchars($image['image_path']); ?>">
                             <div class="image-overlay">
                                 <div class="image-date">
                                     <i class="fas fa-clock"></i> <?php echo date('M d, Y', strtotime($image['uploaded_at'])); ?>
                                 </div>
-                                <a href="../<?php echo htmlspecialchars($image['image_path']); ?>" 
+                                <a href="../uploads/albums/<?php echo $album_id . '/' . htmlspecialchars($image['image_path']); ?>" 
                                    download="photo_<?php echo $index + 1; ?>.<?php echo pathinfo($image['image_path'], PATHINFO_EXTENSION); ?>"
                                    class="download-btn"
                                    onclick="event.stopPropagation();"

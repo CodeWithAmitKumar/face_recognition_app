@@ -4,13 +4,16 @@ require_once '../functions.php';
 require_once '../phpqrcode/qrlib.php';
 requireStudioLogin();
 
+
 $studio_id = $_SESSION['studio_id'];
 $album_id = isset($_GET['album_id']) ? intval($_GET['album_id']) : 0;
+
 
 if ($album_id <= 0) {
     header("Location: select_album.php");
     exit();
 }
+
 
 // Verify album belongs to this studio
 $stmt = $conn->prepare("SELECT * FROM albums WHERE album_id = ? AND studio_id = ?");
@@ -18,15 +21,19 @@ $stmt->bind_param("ii", $album_id, $studio_id);
 $stmt->execute();
 $album_result = $stmt->get_result();
 
+
 if ($album_result->num_rows == 0) {
     header("Location: select_album.php");
     exit();
 }
 
+
 $album = $album_result->fetch_assoc();
 $stmt->close();
 
+
 $error = '';
+
 
 // Handle multiple image uploads
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['images'])) {
@@ -53,10 +60,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['images'])) {
                     $filepath = $upload_folder . $filename;
                     
                     if (move_uploaded_file($tmp_name, $filepath)) {
-                        // Insert into database
-                        $relative_path = "uploads/albums/" . $album_id . "/" . $filename;
+                        // ✅ Insert ONLY filename into database (NOT full path)
                         $stmt = $conn->prepare("INSERT INTO album_images (album_id, image_path) VALUES (?, ?)");
-                        $stmt->bind_param("is", $album_id, $relative_path);
+                        $stmt->bind_param("is", $album_id, $filename);
                         $stmt->execute();
                         $stmt->close();
                         
@@ -105,12 +111,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['images'])) {
     }
 }
 
+
 // Display success message from session
 $success = '';
 if (isset($_SESSION['upload_success'])) {
     $success = $_SESSION['upload_success'];
     unset($_SESSION['upload_success']); // Clear after displaying
 }
+
 
 // Get all images for this album
 $images_query = $conn->prepare("SELECT * FROM album_images WHERE album_id = ? ORDER BY uploaded_at DESC");
@@ -620,7 +628,7 @@ $images = $images_query->get_result();
                 <div class="images-grid">
                     <?php while($image = mysqli_fetch_assoc($images)): ?>
                         <div class="image-card">
-                            <img src="../<?php echo htmlspecialchars($image['image_path']); ?>" alt="Album Image">
+                            <img src="../uploads/albums/<?php echo $album_id . '/' . htmlspecialchars($image['image_path']); ?>" alt="Album Image">
                             <div class="image-overlay">
                                 <div class="image-date">
                                     <i class="fas fa-clock"></i> <?php echo date('M d, Y', strtotime($image['uploaded_at'])); ?>

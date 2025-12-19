@@ -1,9 +1,7 @@
 <?php
 require_once '../config.php';
 require_once '../functions.php';
-requireActiveStudio($conn); // ADD THIS LINE
-
-// requireStudioLogin();
+requireStudioLogin();
 
 $studio_id = $_SESSION['studio_id'];
 $success = '';
@@ -31,6 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $auto_password = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
         $hashed_password = password_hash($auto_password, PASSWORD_DEFAULT);
         
+        // Insert customer - ONLY stores hashed password
         $stmt = $conn->prepare("INSERT INTO customers (studio_id, customer_name, email, password, address_at, address_po, district, state, pin_code, whatsapp_no, contact_no) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->bind_param("issssssssss", $studio_id, $customer_name, $email, $hashed_password, $address_at, $address_po, $district, $state, $pin_code, $whatsapp_no, $contact_no);
         
@@ -154,6 +153,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             display: flex;
             align-items: center;
             gap: 10px;
+            animation: slideDown 0.5s;
+        }
+        
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .info-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            color: #856404;
+        }
+        
+        .info-box i {
+            color: #ffc107;
+            margin-right: 10px;
         }
         
         .form-row {
@@ -223,20 +242,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
         }
         
-        .info-box {
-            background: #e8f0ff;
-            border-left: 4px solid #667eea;
-            padding: 15px 20px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            color: #333;
-        }
-        
-        .info-box i {
-            color: #667eea;
-            margin-right: 10px;
-        }
-        
         @media (max-width: 768px) {
             .navbar {
                 padding: 15px 20px;
@@ -281,8 +286,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             </div>
             
             <div class="info-box">
-                <i class="fas fa-info-circle"></i>
-                <strong>Note:</strong> A 6-digit password will be automatically generated for the customer. Share it securely after creation.
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>Important:</strong> A 6-digit password will be auto-generated. It will be shown ONCE on the next page. Make sure to save it!
             </div>
             
             <?php if ($error): ?>

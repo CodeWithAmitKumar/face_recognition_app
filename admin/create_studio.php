@@ -30,15 +30,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($check_email->get_result()->num_rows > 0) {
         $error = "Email already exists!";
     } else {
-        // Insert studio
+        // Insert studio - ONLY stores hashed password
         $stmt = $conn->prepare("INSERT INTO studios (owner_name, studio_name, email, password, address_at, address_po, district, state, pin_code, whatsapp_no, contact_no) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->bind_param("sssssssssss", $owner_name, $studio_name, $email, $hashed_password, $address_at, $address_po, $district, $state, $pin_code, $whatsapp_no, $contact_no);
         
         if ($stmt->execute()) {
-            $success = "Studio created successfully! Password: <strong>" . $plain_password . "</strong>";
-            
-            // Optional: Send email (uncomment if email is configured)
-            // sendPasswordEmail($email, $studio_name, $plain_password);
+            $success = "Studio created successfully!<br>Email: <strong>$email</strong><br>Password: <strong>$plain_password</strong><br><small style='color:#e74c3c;'>(⚠️ Save this password - it won't be shown again!)</small>";
         } else {
             $error = "Error: " . $stmt->error;
         }
@@ -129,12 +126,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         .success {
             background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
             color: white;
-            padding: 15px 20px;
+            padding: 20px;
             border-radius: 10px;
             margin-bottom: 25px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            text-align: center;
+            animation: slideDown 0.5s;
+            line-height: 1.8;
         }
         
         .error {
@@ -146,6 +143,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             display: flex;
             align-items: center;
             gap: 10px;
+            animation: slideDown 0.5s;
+        }
+        
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         
         .form-row {
@@ -257,8 +260,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             
             <?php if ($success): ?>
                 <div class="success">
-                    <i class="fas fa-check-circle" style="font-size: 24px;"></i>
-                    <span><?php echo $success; ?></span>
+                    <i class="fas fa-check-circle" style="font-size: 28px;"></i><br>
+                    <?php echo $success; ?>
                 </div>
             <?php endif; ?>
             

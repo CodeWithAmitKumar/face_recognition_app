@@ -390,7 +390,7 @@ $albums = $albums_query->get_result();
             <div class="albums-grid">
                 <?php while($album = mysqli_fetch_assoc($albums)): ?>
                     <div class="album-card">
-                        <img src="../<?php echo htmlspecialchars($album['cover_image']); ?>" 
+                        <img src="../uploads/covers/<?php echo htmlspecialchars($album['cover_image']); ?>" 
                              alt="Album Cover" 
                              class="album-cover"
                              onclick="location.href='view_album.php?album_id=<?php echo $album['album_id']; ?>'">

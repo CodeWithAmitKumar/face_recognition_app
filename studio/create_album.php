@@ -3,15 +3,18 @@ require_once '../config.php';
 require_once '../functions.php';
 requireStudioLogin();
 
+
 $studio_id = $_SESSION['studio_id'];
 $success = '';
 $error = '';
+
 
 // Get all customers for this studio
 $customers_query = $conn->prepare("SELECT customer_id, customer_name, email FROM customers WHERE studio_id = ? ORDER BY customer_name ASC");
 $customers_query->bind_param("i", $studio_id);
 $customers_query->execute();
 $customers = $customers_query->get_result();
+
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $customer_id = intval($_POST['customer_id']);
@@ -39,12 +42,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 } else {
                     $cover_filename = "cover_" . uniqid() . '.' . $file_extension;
                     $cover_filepath = COVERS_PATH . $cover_filename;
-                    $cover_relative = "uploads/covers/" . $cover_filename;
                     
                     if (move_uploaded_file($_FILES['cover_image']['tmp_name'], $cover_filepath)) {
-                        // Insert album into database
+                        // ✅ Insert album into database - Save ONLY filename (not full path)
                         $stmt = $conn->prepare("INSERT INTO albums (studio_id, customer_id, album_name, cover_image) VALUES (?, ?, ?, ?)");
-                        $stmt->bind_param("iiss", $studio_id, $customer_id, $album_name, $cover_relative);
+                        $stmt->bind_param("iiss", $studio_id, $customer_id, $album_name, $cover_filename);
                         
                         if ($stmt->execute()) {
                             $album_id = $stmt->insert_id;

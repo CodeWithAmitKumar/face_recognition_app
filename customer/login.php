@@ -20,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $email = clean_input($_POST['email']);
     $password = $_POST['password'];
     
+    // Get customer details - simple query without extra tables
     $stmt = $conn->prepare("SELECT * FROM customers WHERE email = ?");
     $stmt->bind_param("s", $email);
     $stmt->execute();
@@ -27,6 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     if ($result->num_rows > 0) {
         $customer = $result->fetch_assoc();
+        
+        // Check if password matches the hashed password
         if (password_verify($password, $customer['password'])) {
             $_SESSION['user_type'] = 'customer';
             $_SESSION['customer_id'] = $customer['customer_id'];
@@ -116,6 +119,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             display: flex;
             align-items: center;
             gap: 10px;
+            animation: shake 0.5s;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
         }
         
         .form-group {

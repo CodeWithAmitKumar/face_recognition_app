@@ -476,7 +476,7 @@ $delete_success = isset($_GET['deleted']) && $_GET['deleted'] == 'success';
             <div class="albums-grid">
                 <?php while($album = mysqli_fetch_assoc($result)): ?>
                     <div class="album-card">
-                        <img src="../<?php echo htmlspecialchars($album['cover_image']); ?>" 
+                        <img src="../uploads/covers/<?php echo htmlspecialchars($album['cover_image']); ?>" 
                              alt="Album Cover" 
                              class="album-cover"
                              onclick="location.href='upload_images.php?album_id=<?php echo $album['album_id']; ?>'">
