@@ -253,6 +253,8 @@ $recent_studios = mysqli_query($conn, "SELECT * FROM studios ORDER BY created_at
             <a href="index.php"><i class="fas fa-home"></i> Dashboard</a>
             <a href="create_studio.php"><i class="fas fa-plus"></i> Create Studio</a>
             <a href="manage_studios.php"><i class="fas fa-store"></i> Manage Studios</a>
+            <a href="email_settings.php"><i class="fas fa-envelope-open-text"></i> Email Settings</a>
+
             <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
         </div>
     </nav>
