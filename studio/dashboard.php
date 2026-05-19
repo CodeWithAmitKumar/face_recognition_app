@@ -51,7 +51,8 @@ $recent_albums = mysqli_query($conn, "SELECT a.*, COUNT(ai.image_id) as image_co
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Studio Dashboard</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
     <style>
         * {
             margin: 0;
@@ -320,12 +321,13 @@ $recent_albums = mysqli_query($conn, "SELECT a.*, COUNT(ai.image_id) as image_co
                         <a href="manage_customers.php"><i class="fas fa-users"></i> Customers</a>
 
             <a href="create_album.php"><i class="fas fa-plus"></i> Create Album</a>
+                        <a href="select_album.php"><i class="fas fa-folder"></i> My Albums</a>
+
             <a href="view_customer_selections.php">
                <i class="fas fa-heart"></i> Selections
                
            </a>
             <a href="profile.php"><i class="fas fa-user"></i> Profile</a>
-            <a href="select_album.php"><i class="fas fa-folder"></i> My Albums</a>
             <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
         </div>
     </nav>
@@ -364,14 +366,15 @@ $recent_albums = mysqli_query($conn, "SELECT a.*, COUNT(ai.image_id) as image_co
             </div>
 
             <div class="stat-card">
-                <div class="stat-icon customer">
+                <div class="stat-icon blue">
                     <i class="fas fa-users"></i>
                 </div>
-                <div class="stat-content">
+                <div class="stat-info">
                     <h3><?php echo $stats['customers']; ?></h3>
                     <p>Total Customers</p>
                 </div>
             </div>
+
 
             <div class="stat-card">
                 <div class="stat-icon green">

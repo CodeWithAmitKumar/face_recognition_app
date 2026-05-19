@@ -41,44 +41,51 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['images'])) {
     $error_count = 0;
     
     $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif'];
+    $max_file_size = 5 * 1024 * 1024; // 5 MB
+
     $upload_folder = ALBUMS_PATH . $album_id . "/";
     
     // Create folder if not exists
     if (!file_exists($upload_folder)) {
         mkdir($upload_folder, 0755, true);
     }
-    
     foreach ($_FILES['images']['tmp_name'] as $key => $tmp_name) {
-        if ($_FILES['images']['error'][$key] == 0) {
-            $file_extension = strtolower(pathinfo($_FILES['images']['name'][$key], PATHINFO_EXTENSION));
-            
-            if (in_array($file_extension, $allowed_extensions)) {
-                $imageinfo = getimagesize($tmp_name);
-                
-                if ($imageinfo !== false) {
-                    $filename = "img_" . uniqid() . '.' . $file_extension;
-                    $filepath = $upload_folder . $filename;
-                    
-                    if (move_uploaded_file($tmp_name, $filepath)) {
-                        // ✅ Insert ONLY filename into database (NOT full path)
-                        $stmt = $conn->prepare("INSERT INTO album_images (album_id, image_path) VALUES (?, ?)");
-                        $stmt->bind_param("is", $album_id, $filename);
-                        $stmt->execute();
-                        $stmt->close();
-                        
-                        $upload_count++;
-                    } else {
-                        $error_count++;
-                    }
+    if ($_FILES['images']['error'][$key] == 0) {
+
+        // ✅ MAX SIZE CHECK (5MB)
+        if ($_FILES['images']['size'][$key] > $max_file_size) {
+            $error_count++;
+            continue;
+        }
+
+        $file_extension = strtolower(pathinfo($_FILES['images']['name'][$key], PATHINFO_EXTENSION));
+
+        if (in_array($file_extension, $allowed_extensions)) {
+            $imageinfo = getimagesize($tmp_name);
+
+            if ($imageinfo !== false) {
+                $filename = "img_" . uniqid() . '.' . $file_extension;
+                $filepath = $upload_folder . $filename;
+
+                if (move_uploaded_file($tmp_name, $filepath)) {
+                    $stmt = $conn->prepare("INSERT INTO album_images (album_id, image_path) VALUES (?, ?)");
+                    $stmt->bind_param("is", $album_id, $filename);
+                    $stmt->execute();
+                    $stmt->close();
+
+                    $upload_count++;
                 } else {
                     $error_count++;
                 }
             } else {
                 $error_count++;
             }
+        } else {
+            $error_count++;
         }
     }
-    
+}
+
     if ($upload_count > 0) {
         // Generate QR code if not exists
         if (empty($album['qr_code'])) {
@@ -107,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['images'])) {
         header("Location: upload_images.php?album_id=" . $album_id);
         exit();
     } else {
-        $error = "Failed to upload images. Please try again.";
+$error = "Some images failed to upload. Maximum allowed size is 5MB per image.";
     }
 }
 

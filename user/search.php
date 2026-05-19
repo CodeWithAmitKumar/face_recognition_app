@@ -38,9 +38,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
             if ($imageinfo === false) {
                 $error = "File is not a valid image.";
             } else {
-                // Generate filename ONLY
                 $filename = uniqid('search_', true) . '.jpg';
-                $temp_image = "../uploads/search_temp/" . $filename;  // Full path for file operations
+                $temp_image = "../uploads/search_temp/" . $filename;
                 
                 if (move_uploaded_file($_FILES['user_photo']['tmp_name'], $temp_image)) {
                     $album_folder = "../uploads/albums/" . $album_id . "/";
@@ -58,12 +57,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
                     
                     if ($result && isset($result['matches'])) {
                         $matches = $result['matches'];
-                        
                         $match_count = count($matches);
                         
-                        // Save ONLY filename in database (not full path)
                         $stmt = $conn->prepare("INSERT INTO search_logs (album_id, search_image, matches_found) VALUES (?, ?, ?)");
-                        $stmt->bind_param("isi", $album_id, $filename, $match_count);  // ✅ Using $filename instead of $temp_image
+                        $stmt->bind_param("isi", $album_id, $filename, $match_count);
                         $stmt->execute();
                         $stmt->close();
                     } elseif ($result && isset($result['error'])) {
@@ -161,7 +158,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
             margin: 0 auto 50px;
         }
         
-        /* IMAGE PREVIEW STYLES */
         .preview-container {
             display: none;
             margin-bottom: 30px;
@@ -562,6 +558,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
             font-size: 18px;
             font-weight: 600;
         }
+
+        /* Camera mode */
+        #cameraMode video {
+            width: 100%;
+            max-width: 400px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
         
         @media (max-width: 768px) {
             .container {
@@ -595,7 +599,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
         </div>
         
         <div class="upload-section">
-            <!-- IMAGE PREVIEW SECTION -->
             <div class="preview-container" id="previewContainer">
                 <div class="preview-header">
                     <i class="fas fa-eye"></i> Preview
@@ -610,9 +613,30 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
             </div>
             
             <form method="POST" enctype="multipart/form-data" id="searchForm">
+                <!-- Mode buttons -->
+                <div style="text-align:center; margin-bottom:20px;">
+                    <button type="button" onclick="useCamera()" class="btn-search" style="width:auto; padding:10px 20px; margin-right:10px;">
+                        <i class="fas fa-video"></i> Use Camera
+                    </button>
+                    <button type="button" onclick="useFileUpload()" class="btn-search" style="width:auto; padding:10px 20px;">
+                        <i class="fas fa-upload"></i> Upload Image
+                    </button>
+                </div>
+
+                <!-- Camera mode -->
+                <div id="cameraMode" style="display:none; text-align:center; margin-bottom:30px;">
+                    <video id="cameraVideo" autoplay playsinline></video>
+                    <br><br>
+                    <button type="button" onclick="captureFromCamera()" class="btn-search" style="width:auto; padding:10px 25px;">
+                        <i class="fas fa-camera"></i> Capture Photo
+                    </button>
+                    <canvas id="cameraCanvas" style="display:none;"></canvas>
+                </div>
+
+                <!-- Upload mode (existing UI) -->
                 <div class="upload-container" id="uploadContainer">
                     <label for="user_photo" class="file-input-wrapper">
-                        <input type="file" id="user_photo" name="user_photo" accept="image/*" required onchange="handleFileSelect(event)">
+                        <input type="file" id="user_photo" name="user_photo" accept="image/*" onchange="handleFileSelect(event)">
                         <div class="upload-icon">
                             <i class="fas fa-camera"></i>
                         </div>
@@ -620,7 +644,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
                         <div class="upload-subtext">Click or drag & drop your photo here</div>
                     </label>
                 </div>
-                <button type="submit" class="btn-search" id="submitBtn">
+
+                <!-- Hidden helpers for camera mode -->
+                <input type="hidden" name="from_camera" id="from_camera" value="0">
+                <input type="hidden" id="camera_image_data">
+
+                <button type="submit" class="btn-search" id="submitBtn" disabled>
                     <i class="fas fa-search"></i> Search for Matches
                 </button>
             </form>
@@ -655,7 +684,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
                                    download="photo_<?php echo $index + 1; ?>.<?php echo pathinfo($match, PATHINFO_EXTENSION); ?>"
                                    class="download-btn"
                                    title="Download Image">
-                                    <i class="fas fa-download"></i>
+                                   <i class="fas fa-download"></i>
                                 </a>
                             </div>
                         <?php endforeach; ?>
@@ -665,7 +694,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
                 <div class="no-match">
                     <div class="no-match-icon">😔</div>
                     <h3>No Matching Photos Found</h3>
-                    <p>We couldn't find any photos with your face in this album.<br>Try uploading a different photo with a clear view of your face.</p>
+                    <p>We couldn't find any photos with your face in this album.<br>Try uploading or capturing a different photo with a clear view of your face.</p>
                 </div>
             <?php endif; ?>
         <?php endif; ?>
@@ -680,8 +709,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
         const previewContainer = document.getElementById('previewContainer');
         const previewImage = document.getElementById('previewImage');
         const previewFilename = document.getElementById('previewFilename');
-        
-        // Handle file selection with preview
+
+        const cameraMode = document.getElementById('cameraMode');
+        const fromCamera = document.getElementById('from_camera');
+        const cameraImageData = document.getElementById('camera_image_data');
+        const video = document.getElementById('cameraVideo');
+        const canvas = document.getElementById('cameraCanvas');
+        let cameraStream = null;
+
         function handleFileSelect(event) {
             const file = event.target.files[0];
             
@@ -692,7 +727,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
                     previewImage.src = e.target.result;
                     previewFilename.innerHTML = '<i class="fas fa-file-image"></i> ' + file.name;
                     previewContainer.classList.add('active');
-                    uploadContainer.style.display = 'none';
                     submitBtn.disabled = false;
                 }
                 
@@ -700,20 +734,79 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
             } else {
                 alert('Please select a valid image file!');
                 fileInput.value = '';
+                submitBtn.disabled = true;
             }
         }
         
-        // Remove preview and show upload container again
         function removePreview() {
             fileInput.value = '';
             previewContainer.classList.remove('active');
-            uploadContainer.style.display = 'block';
             previewImage.src = '';
             previewFilename.innerHTML = '';
+            cameraImageData.value = '';
             submitBtn.disabled = true;
         }
-        
-        // Drag and drop functionality
+
+        // Camera / upload mode switching
+        function useCamera() {
+            cameraMode.style.display = 'block';
+            uploadContainer.style.display = 'none';
+            removePreview();
+            fromCamera.value = '1';
+
+            if (!cameraStream) {
+                navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(stream => {
+                        cameraStream = stream;
+                        video.srcObject = stream;
+                    })
+                    .catch(err => {
+                        alert('Cannot access camera: ' + err.message);
+                        useFileUpload();
+                    });
+            }
+        }
+
+        function useFileUpload() {
+            cameraMode.style.display = 'none';
+            uploadContainer.style.display = 'block';
+            fromCamera.value = '0';
+            removePreview();
+
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(t => t.stop());
+                cameraStream = null;
+            }
+        }
+
+        function captureFromCamera() {
+            if (!cameraStream) {
+                alert('Camera not started');
+                return;
+            }
+
+            const width = video.videoWidth;
+            const height = video.videoHeight;
+            if (!width || !height) {
+                alert('Camera not ready yet, please try again.');
+                return;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, width, height);
+
+            const dataUrl = canvas.toDataURL('image/jpeg');
+            cameraImageData.value = dataUrl;
+
+            previewImage.src = dataUrl;
+            previewFilename.innerHTML = '<i class="fas fa-camera"></i> Captured from camera';
+            previewContainer.classList.add('active');
+            submitBtn.disabled = false;
+        }
+
+        // Drag & drop for upload box
         uploadContainer.addEventListener('dragover', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -736,22 +829,54 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['user_photo'])) {
                 handleFileSelect({ target: { files: e.dataTransfer.files } });
             }
         });
-        
-        // Form submit with loading
+
+        // Submit handler: branch for camera vs upload
         searchForm.addEventListener('submit', function(e) {
-            if (!fileInput.files || fileInput.files.length === 0) {
+            if (fromCamera.value === '1') {
                 e.preventDefault();
-                alert('Please select a photo first!');
-                return false;
+                if (!cameraImageData.value) {
+                    alert('Please capture a photo first!');
+                    return;
+                }
+
+                loading.classList.add('active');
+
+                fetch(cameraImageData.value)
+                    .then(res => res.arrayBuffer())
+                    .then(buf => {
+                        const file = new File([buf], 'camera_photo.jpg', { type: 'image/jpeg' });
+                        const formData = new FormData();
+                        formData.append('user_photo', file);
+                        formData.append('from_camera', '1');
+
+                        fetch(window.location.href, {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(r => r.text())
+                        .then(html => {
+                            document.open();
+                            document.write(html);
+                            document.close();
+                        })
+                        .catch(err => {
+                            loading.classList.remove('active');
+                            alert('Error uploading captured image: ' + err.message);
+                        });
+                    });
+            } else {
+                if (!fileInput.files || fileInput.files.length === 0) {
+                    e.preventDefault();
+                    alert('Please select a photo first!');
+                    return false;
+                }
+                loading.classList.add('active');
             }
-            loading.classList.add('active');
         });
-        
-        // Prevent default drag/drop on whole page
+
         document.addEventListener('dragover', (e) => e.preventDefault());
         document.addEventListener('drop', (e) => e.preventDefault());
         
-        // Download all images function
         function downloadAll() {
             const images = document.querySelectorAll('.match-image');
             images.forEach((img, index) => {
