@@ -4,16 +4,13 @@ require_once '../functions.php';
 require_once '../phpqrcode/qrlib.php';
 requireStudioLogin();
 
-
 $studio_id = $_SESSION['studio_id'];
 $album_id = isset($_GET['album_id']) ? intval($_GET['album_id']) : 0;
-
 
 if ($album_id <= 0) {
     header("Location: select_album.php");
     exit();
 }
-
 
 // Verify album belongs to this studio
 $stmt = $conn->prepare("SELECT * FROM albums WHERE album_id = ? AND studio_id = ?");
@@ -21,19 +18,13 @@ $stmt->bind_param("ii", $album_id, $studio_id);
 $stmt->execute();
 $album_result = $stmt->get_result();
 
-
 if ($album_result->num_rows == 0) {
     header("Location: select_album.php");
     exit();
 }
 
-
 $album = $album_result->fetch_assoc();
 $stmt->close();
-
-
-$error = '';
-
 
 // Handle multiple image uploads
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['images'])) {
@@ -49,42 +40,43 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['images'])) {
     if (!file_exists($upload_folder)) {
         mkdir($upload_folder, 0755, true);
     }
+    
     foreach ($_FILES['images']['tmp_name'] as $key => $tmp_name) {
-    if ($_FILES['images']['error'][$key] == 0) {
+        if ($_FILES['images']['error'][$key] == 0) {
 
-        // ✅ MAX SIZE CHECK (5MB)
-        if ($_FILES['images']['size'][$key] > $max_file_size) {
-            $error_count++;
-            continue;
-        }
+            // ✅ MAX SIZE CHECK (5MB)
+            if ($_FILES['images']['size'][$key] > $max_file_size) {
+                $error_count++;
+                continue;
+            }
 
-        $file_extension = strtolower(pathinfo($_FILES['images']['name'][$key], PATHINFO_EXTENSION));
+            $file_extension = strtolower(pathinfo($_FILES['images']['name'][$key], PATHINFO_EXTENSION));
 
-        if (in_array($file_extension, $allowed_extensions)) {
-            $imageinfo = getimagesize($tmp_name);
+            if (in_array($file_extension, $allowed_extensions)) {
+                $imageinfo = getimagesize($tmp_name);
 
-            if ($imageinfo !== false) {
-                $filename = "img_" . uniqid() . '.' . $file_extension;
-                $filepath = $upload_folder . $filename;
+                if ($imageinfo !== false) {
+                    $filename = "img_" . uniqid() . '.' . $file_extension;
+                    $filepath = $upload_folder . $filename;
 
-                if (move_uploaded_file($tmp_name, $filepath)) {
-                    $stmt = $conn->prepare("INSERT INTO album_images (album_id, image_path) VALUES (?, ?)");
-                    $stmt->bind_param("is", $album_id, $filename);
-                    $stmt->execute();
-                    $stmt->close();
+                    if (move_uploaded_file($tmp_name, $filepath)) {
+                        $stmt = $conn->prepare("INSERT INTO album_images (album_id, image_path) VALUES (?, ?)");
+                        $stmt->bind_param("is", $album_id, $filename);
+                        $stmt->execute();
+                        $stmt->close();
 
-                    $upload_count++;
+                        $upload_count++;
+                    } else {
+                        $error_count++;
+                    }
                 } else {
                     $error_count++;
                 }
             } else {
                 $error_count++;
             }
-        } else {
-            $error_count++;
         }
     }
-}
 
     if ($upload_count > 0) {
         // Generate QR code if not exists
@@ -106,26 +98,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['images'])) {
             $album['shareable_link'] = $shareable_link;
         }
         
-        // REDIRECT to prevent duplicate submission on refresh
         $_SESSION['upload_success'] = "$upload_count image(s) uploaded successfully!";
         if ($error_count > 0) {
             $_SESSION['upload_success'] .= " ($error_count failed)";
         }
-        header("Location: upload_images.php?album_id=" . $album_id);
-        exit();
     } else {
-$error = "Some images failed to upload. Maximum allowed size is 5MB per image.";
+        // STORE ERROR IN SESSION INSTEAD OF LOCAL VARIABLE
+        $_SESSION['upload_error'] = "Some images failed to upload. Maximum allowed size is 5MB per image.";
     }
+    
+    // ✅ ALWAYS REDIRECT at the end of the POST request
+    // Change 'upload_images.php' if your file is named something else
+    header("Location: upload_images.php?album_id=" . $album_id);
+    exit();
 }
 
-
-// Display success message from session
+// Display success/error messages from session
 $success = '';
+$error = '';
+
 if (isset($_SESSION['upload_success'])) {
     $success = $_SESSION['upload_success'];
     unset($_SESSION['upload_success']); // Clear after displaying
 }
 
+if (isset($_SESSION['upload_error'])) {
+    $error = $_SESSION['upload_error'];
+    unset($_SESSION['upload_error']); // Clear after displaying
+}
 
 // Get all images for this album
 $images_query = $conn->prepare("SELECT * FROM album_images WHERE album_id = ? ORDER BY uploaded_at DESC");
